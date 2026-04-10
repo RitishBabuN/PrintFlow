@@ -111,15 +111,25 @@ const StaffDashboard = () => {
                                             <Button variant="primary" onClick={() => handleAction(job._id, 'accept')}>Accept Job</Button>
                                         )}
                                         {job.status === 'Accepted' && (
-                                            <Button variant="primary" onClick={() => handleAction(job._id, 'status', 'Printing')}>Start Printing</Button>
+                                            <>
+                                                <a href={`${api.defaults.baseURL || 'http://localhost:5000'}/uploads/${job.fileUrl}`} download className="btn btn-secondary" target="_blank" rel="noopener noreferrer">
+                                                    ⬇️ Download File
+                                                </a>
+                                                <Button variant="primary" onClick={() => handleAction(job._id, 'status', 'Printing')}>Start Printing</Button>
+                                            </>
                                         )}
                                         {job.status === 'Printing' && (
-                                            <Button variant="success" onClick={() => handleAction(job._id, 'status', 'Ready for Collection')}>Mark Ready</Button>
+                                            <>
+                                                <a href={`${api.defaults.baseURL || 'http://localhost:5000'}/uploads/${job.fileUrl}`} download className="btn btn-secondary" target="_blank" rel="noopener noreferrer">
+                                                    ⬇️ Download File
+                                                </a>
+                                                <Button variant="success" onClick={() => handleAction(job._id, 'status', 'Ready for Collection')}>Mark Ready</Button>
+                                            </>
                                         )}
                                         {job.status === 'Ready for Collection' && (
                                             <Button variant="secondary" onClick={() => handleAction(job._id, 'status', 'Collected')}>Handed Over</Button>
                                         )}
-                                        <Button variant="danger" onClick={() => handleAction(job._id, 'status', 'Failed')}>Fail/Refund</Button>
+                                        <Button variant="danger" onClick={() => handleAction(job._id, 'status', 'Failed')}>Reject/Unlock</Button>
                                     </>
                                 )}
                                 {index > 0 && <span className="text-warning text-sm font-bold">[LOCKED]</span>}

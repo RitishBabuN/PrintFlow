@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const Printer = require('../models/Printer');
 const fs = require('fs');
+const pdfParse = require('pdf-parse');
 
 const PRICE_PER_PAGE = 2; // 2 Rupees per page
 
@@ -17,8 +18,48 @@ const createPrintJob = async (req, res) => {
 
         const { color, doubleSided, copies, pageRange, isInstant, scheduledTime } = req.body;
 
-        // Force all documents to use exactly the same size-based calculation shown in the frontend estimation
-        const pages = Math.max(1, Math.ceil(req.file.size / 50000));
+        let pages = Math.max(1, Math.ceil(req.file.size / 50000));
+
+        if (req.file.mimetype === 'application/pdf') {
+            try {
+                const dataBuffer = fs.readFileSync(req.file.path);
+                const data = await pdfParse(dataBuffer);
+                pages = data.numpages || pages;
+            } catch (err) {
+                console.error("Failed to parse PDF pages", err);
+            }
+        }
+
+        const parsePageRange = (rangeStr, totalPages) => {
+            if (!rangeStr || rangeStr.trim().toLowerCase() === 'all') {
+                return totalPages || 1;
+            }
+            const parts = rangeStr.split(',');
+            let count = 0;
+            const added = new Set();
+            
+            for (let p of parts) {
+                const bounds = p.split('-').map(s => parseInt(s.trim()));
+                if (bounds.length === 1 && !isNaN(bounds[0])) {
+                    if (!added.has(bounds[0])) {
+                        added.add(bounds[0]);
+                        count++;
+                    }
+                } else if (bounds.length === 2 && !isNaN(bounds[0]) && !isNaN(bounds[1])) {
+                    const start = Math.min(bounds[0], bounds[1]);
+                    const end = Math.max(bounds[0], bounds[1]);
+                    for (let i = start; i <= end; i++) {
+                        if (!added.has(i)) {
+                            added.add(i);
+                            count++;
+                        }
+                    }
+                }
+            }
+            return count > 0 ? count : (totalPages || 1);
+        };
+
+        const calculatedPages = parsePageRange(pageRange, pages);
 
         const calculatedCopies = copies ? parseInt(copies) : 1;
         const isColor = color === 'true' || color === true;
@@ -32,7 +73,7 @@ const createPrintJob = async (req, res) => {
             pageCost = isDouble ? 2 : 3;
         }
 
-        const totalCost = pages * calculatedCopies * pageCost;
+        const totalCost = calculatedPages * calculatedCopies * pageCost;
 
         if (!jobIsInstant && scheduledTime) {
             const schedTime = new Date(scheduledTime);
@@ -80,7 +121,7 @@ const createPrintJob = async (req, res) => {
             userId: req.user._id,
             fileUrl: req.file.filename,
             fileName: req.file.originalname,
-            pages,
+            pages: calculatedPages,
             status: 'Submitted',
             printConfig: {
                 color: isColor,
@@ -113,7 +154,7 @@ const getQueue = async (req, res) => {
     try {
         const jobs = await PrintJob.find({ status: { $in: ['Submitted', 'In Queue', 'Printing', 'Accepted'] } })
             .populate('userId', 'name email')
-            .sort({ createdAt: 1 });
+            .sort({ isInstant: -1, scheduledTime: 1, createdAt: 1 });
         res.json(jobs);
     } catch (error) {
         res.status(500).json({ message: error.message });
