@@ -20,8 +20,14 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem('userInfo');
     };
 
+    const updateUser = (userData) => {
+        const updated = { ...user, ...userData };
+        setUser(updated);
+        localStorage.setItem('userInfo', JSON.stringify(updated));
+    };
+
     return (
-        <AuthContext.Provider value={{ user, login, logout }}>
+        <AuthContext.Provider value={{ user, login, logout, updateUser }}>
             {children}
         </AuthContext.Provider>
     );

@@ -4,6 +4,7 @@ const {
     registerUser,
     authUser,
     getUserProfile,
+    updateUserProfile,
     topUpWallet,
     getAdminRevenue,
     refundWallet,
@@ -16,7 +17,7 @@ const { protect } = require('../middlewares/authMiddleware');
 
 router.post('/register', registerUser);
 router.post('/login', authUser);
-router.route('/profile').get(protect, getUserProfile);
+router.route('/profile').get(protect, getUserProfile).put(protect, updateUserProfile);
 router.post('/topup', protect, topUpWallet);
 router.post('/refund', protect, refundWallet);
 

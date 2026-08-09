@@ -100,6 +100,64 @@ const getUserProfile = async (req, res) => {
     }
 };
 
+// @desc    Update user profile and/or change password
+// @route   PUT /api/users/profile
+// @access  Private
+const updateUserProfile = async (req, res) => {
+    try {
+        console.log(`Update profile request for user ID: ${req.user?._id}`);
+        const user = await User.findById(req.user._id);
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const { name, email, phone, oldPassword, newPassword } = req.body;
+
+        // Verify old password if user attempts to change password
+        if (newPassword) {
+            if (!oldPassword) {
+                return res.status(400).json({ message: 'Please enter your current password to change password' });
+            }
+            const isMatch = await bcrypt.compare(oldPassword, user.password);
+            if (!isMatch) {
+                console.log(`Password mismatch for user ${user.email}`);
+                return res.status(400).json({ message: 'Incorrect current password' });
+            }
+            const salt = await bcrypt.genSalt(10);
+            user.password = await bcrypt.hash(newPassword, salt);
+            console.log(`Password updated successfully for user ${user.email}`);
+        }
+
+        // Update profile fields
+        if (name) user.name = name;
+        if (phone !== undefined) user.phone = phone;
+        if (email && email !== user.email) {
+            const emailExists = await User.findOne({ email, _id: { $ne: user._id } });
+            if (emailExists) {
+                return res.status(400).json({ message: 'Email address is already in use' });
+            }
+            user.email = email;
+        }
+
+        const updatedUser = await user.save();
+
+        res.json({
+            _id: updatedUser._id,
+            name: updatedUser.name,
+            email: updatedUser.email,
+            phone: updatedUser.phone,
+            role: updatedUser.role,
+            walletBalance: updatedUser.walletBalance,
+            lockedBalance: updatedUser.lockedBalance,
+            token: generateToken(updatedUser._id),
+        });
+    } catch (error) {
+        console.error('updateUserProfile error:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
 // @desc    Top up user wallet
 // @route   POST /api/users/topup
 // @access  Private
@@ -286,6 +344,7 @@ module.exports = {
     registerUser,
     authUser,
     getUserProfile,
+    updateUserProfile,
     topUpWallet,
     getAdminRevenue,
     refundWallet,
