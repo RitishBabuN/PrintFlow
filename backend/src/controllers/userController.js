@@ -7,7 +7,7 @@ const bcrypt = require('bcryptjs');
 // @route   POST /api/users/register
 // @access  Public
 const registerUser = async (req, res) => {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, phone, role } = req.body;
 
     try {
         const userExists = await User.findOne({ email });
@@ -25,6 +25,7 @@ const registerUser = async (req, res) => {
             name,
             email,
             password: hashedPassword,
+            phone: phone || '',
             role: userRole,
         });
 
@@ -33,6 +34,7 @@ const registerUser = async (req, res) => {
                 _id: user._id,
                 name: user.name,
                 email: user.email,
+                phone: user.phone,
                 role: user.role,
                 walletBalance: user.walletBalance,
                 token: generateToken(user._id),
@@ -59,6 +61,7 @@ const authUser = async (req, res) => {
                 _id: user._id,
                 name: user.name,
                 email: user.email,
+                phone: user.phone,
                 role: user.role,
                 walletBalance: user.walletBalance,
                 lockedBalance: user.lockedBalance,
@@ -84,6 +87,7 @@ const getUserProfile = async (req, res) => {
                 _id: user._id,
                 name: user.name,
                 email: user.email,
+                phone: user.phone,
                 role: user.role,
                 walletBalance: user.walletBalance,
                 lockedBalance: user.lockedBalance,

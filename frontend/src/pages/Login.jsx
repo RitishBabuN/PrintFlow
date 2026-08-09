@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { Card } from '../components/Card';
@@ -66,6 +66,13 @@ const Login = () => {
                         {loading ? 'Authenticating...' : 'Sign In'}
                     </Button>
                 </form>
+
+                <div className="text-center mt-6 text-sm text-secondary">
+                    Don't have an account?{' '}
+                    <Link to="/register" className="text-primary font-semibold hover:underline">
+                        Register as Student
+                    </Link>
+                </div>
             </Card>
         </div>
     );
