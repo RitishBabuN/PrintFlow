@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { Card } from '../components/Card';
@@ -48,6 +49,26 @@ const Register = () => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleGoogleSuccess = async (credentialResponse) => {
+        try {
+            setLoading(true);
+            setError('');
+            const { data } = await api.post('/api/users/google-auth', {
+                credential: credentialResponse.credential
+            });
+            login(data);
+            navigate('/student');
+        } catch (err) {
+            setError(err.response?.data?.message || 'Google sign-up failed');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleGoogleError = () => {
+        setError('Google authentication was cancelled or failed');
     };
 
     return (
@@ -107,6 +128,23 @@ const Register = () => {
                         {loading ? 'Creating Account...' : 'Register Student Account'}
                     </Button>
                 </form>
+
+                <div className="flex-center my-4 gap-2">
+                    <div style={{ flex: 1, height: '1px', background: 'var(--border-color)' }}></div>
+                    <span className="text-sm text-secondary">OR</span>
+                    <div style={{ flex: 1, height: '1px', background: 'var(--border-color)' }}></div>
+                </div>
+
+                <div className="flex-center w-full">
+                    <GoogleLogin
+                        onSuccess={handleGoogleSuccess}
+                        onError={handleGoogleError}
+                        theme="filled_dark"
+                        shape="pill"
+                        text="signup_with"
+                        width="100%"
+                    />
+                </div>
 
                 <div className="text-center mt-6 text-sm text-secondary">
                     Already have an account?{' '}

@@ -3,6 +3,7 @@ const router = express.Router();
 const {
     registerUser,
     authUser,
+    googleAuthUser,
     getUserProfile,
     updateUserProfile,
     topUpWallet,
@@ -17,6 +18,7 @@ const { protect } = require('../middlewares/authMiddleware');
 
 router.post('/register', registerUser);
 router.post('/login', authUser);
+router.post('/google-auth', googleAuthUser);
 router.route('/profile').get(protect, getUserProfile).put(protect, updateUserProfile);
 router.post('/topup', protect, topUpWallet);
 router.post('/refund', protect, refundWallet);
