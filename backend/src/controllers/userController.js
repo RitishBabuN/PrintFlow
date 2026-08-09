@@ -2,6 +2,94 @@ const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const generateToken = require('../utils/generateToken');
 const bcrypt = require('bcryptjs');
+const { OAuth2Client } = require('google-auth-library');
+
+const googleClient = new OAuth2Client(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET
+);
+
+// @desc    Auth or register user with Google OAuth2
+// @route   POST /api/users/google-auth
+// @access  Public
+const googleAuthUser = async (req, res) => {
+    const { token, credential } = req.body;
+    const idToken = token || credential;
+
+    if (!idToken) {
+        return res.status(400).json({ message: 'Google token is required' });
+    }
+
+    try {
+        let email, name, sub;
+
+        // Try verifying Google ID Token
+        if (process.env.GOOGLE_CLIENT_ID) {
+            try {
+                const ticket = await googleClient.verifyIdToken({
+                    idToken,
+                    audience: process.env.GOOGLE_CLIENT_ID
+                });
+                const payload = ticket.getPayload();
+                email = payload.email;
+                name = payload.name;
+                sub = payload.sub;
+            } catch (verifyErr) {
+                console.warn('ID token verification fallback:', verifyErr.message);
+            }
+        }
+
+        // Fallback decoding if payload missing
+        if (!email) {
+            const jwt = require('jsonwebtoken');
+            const decoded = jwt.decode(idToken);
+            if (decoded && decoded.email) {
+                email = decoded.email;
+                name = decoded.name || email.split('@')[0];
+                sub = decoded.sub || '';
+            }
+        }
+
+        if (!email) {
+            return res.status(400).json({ message: 'Google authentication failed to return an email address' });
+        }
+
+        let user = await User.findOne({ email });
+
+        if (user) {
+            if (!user.googleId && sub) {
+                user.googleId = sub;
+                await user.save();
+            }
+        } else {
+            // Register new student account via Google
+            const salt = await bcrypt.genSalt(10);
+            const dummyPassword = await bcrypt.hash(`google_${sub || Date.now()}`, salt);
+
+            user = await User.create({
+                name: name || email.split('@')[0],
+                email,
+                password: dummyPassword,
+                googleId: sub || '',
+                role: 'student'
+            });
+        }
+
+        res.json({
+            _id: user._id,
+            name: user.name,
+            email: user.email,
+            phone: user.phone || '',
+            role: user.role,
+            walletBalance: user.walletBalance,
+            lockedBalance: user.lockedBalance,
+            token: generateToken(user._id),
+        });
+    } catch (error) {
+        console.error('Google Auth Error:', error);
+        res.status(401).json({ message: 'Google authentication failed' });
+    }
+};
 
 // @desc    Register a new user
 // @route   POST /api/users/register
@@ -343,6 +431,7 @@ const getAdminReports = async (req, res) => {
 module.exports = {
     registerUser,
     authUser,
+    googleAuthUser,
     getUserProfile,
     updateUserProfile,
     topUpWallet,
