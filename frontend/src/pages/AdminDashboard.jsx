@@ -21,6 +21,17 @@ const AdminDashboard = () => {
     const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'student' });
     const [loading, setLoading] = useState(false);
 
+    // System Settings state
+    const [settings, setSettings] = useState({
+        bwSinglePageCost: 3,
+        bwDoublePageCost: 2,
+        colorSinglePageCost: 14,
+        colorDoublePageCost: 10,
+        maxFileSizeMb: 10,
+        maxSlotBookings: 5
+    });
+    const [savingSettings, setSavingSettings] = useState(false);
+
     useEffect(() => {
         if (!user) {
             if (!localStorage.getItem('userInfo')) navigate('/login');
@@ -32,6 +43,7 @@ const AdminDashboard = () => {
         }
 
         fetchDashboardData();
+        fetchSettings();
     }, [user, navigate]);
 
     const fetchDashboardData = async () => {
@@ -47,6 +59,15 @@ const AdminDashboard = () => {
         }
     };
 
+    const fetchSettings = async () => {
+        try {
+            const res = await api.get('/api/config');
+            setSettings(res.data);
+        } catch (err) {
+            console.error("Failed to fetch system config", err);
+        }
+    };
+
     const fetchUsers = async () => {
         try {
             const res = await api.get('/api/users/admin/users');
@@ -59,6 +80,11 @@ const AdminDashboard = () => {
     const handleOpenUsers = () => {
         setIsUsersModalOpen(true);
         fetchUsers();
+    };
+
+    const handleOpenSettings = () => {
+        setIsSettingsModalOpen(true);
+        fetchSettings();
     };
 
     const handleDeleteUser = async (id) => {
@@ -115,10 +141,19 @@ const AdminDashboard = () => {
         }
     };
 
-    const handleSaveSettings = (e) => {
+    const handleSaveSettings = async (e) => {
         e.preventDefault();
-        alert('System settings updated globally across the network! (Simulated)');
-        setIsSettingsModalOpen(false);
+        setSavingSettings(true);
+        try {
+            const res = await api.put('/api/config', settings);
+            setSettings(res.data);
+            alert('System settings updated globally in MongoDB!');
+            setIsSettingsModalOpen(false);
+        } catch (err) {
+            alert(err.response?.data?.message || 'Failed to update settings');
+        } finally {
+            setSavingSettings(false);
+        }
     };
 
     return (
@@ -130,8 +165,8 @@ const AdminDashboard = () => {
 
             <div className="grid-2 gap-4">
                 <Card title="System Settings">
-                    <p className="text-secondary mb-4">Manage global system settings like print cost, queue algorithms, etc.</p>
-                    <Button variant="secondary" onClick={() => setIsSettingsModalOpen(true)}>Configure Settings</Button>
+                    <p className="text-secondary mb-4">Manage global system settings like print cost, max file size, queue slot limits.</p>
+                    <Button variant="secondary" onClick={handleOpenSettings}>Configure Settings</Button>
                 </Card>
                 <Card title="Financial Reports">
                     <p className="text-secondary mb-2">View total revenue generated.</p>
@@ -196,28 +231,38 @@ const AdminDashboard = () => {
                 </div>
             </Modal>
 
-            <Modal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} title="Configure Global Settings">
+            <Modal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} title="Configure Global System Settings">
                 <form onSubmit={handleSaveSettings} className="flex-col gap-4">
-                    <p className="text-secondary">Note: You are configuring global tier definitions. These override standard settings.</p>
+                    <p className="text-secondary text-sm">Update dynamic rates and slot limits stored in MongoDB.</p>
                     <div className="grid-2 gap-4">
                         <div>
-                            <label className="text-sm">Base Cost B&W (₹)</label>
-                            <Input type="number" defaultValue="2" min="1" step="0.5" />
+                            <label className="text-sm font-semibold">B&W Single Page Cost (₹)</label>
+                            <Input type="number" min="0" step="0.5" value={settings.bwSinglePageCost} onChange={(e) => setSettings({...settings, bwSinglePageCost: e.target.value})} required />
                         </div>
                         <div>
-                            <label className="text-sm">Base Cost Color (₹)</label>
-                            <Input type="number" defaultValue="14" min="1" step="1" />
+                            <label className="text-sm font-semibold">B&W Double Page Cost (₹)</label>
+                            <Input type="number" min="0" step="0.5" value={settings.bwDoublePageCost} onChange={(e) => setSettings({...settings, bwDoublePageCost: e.target.value})} required />
                         </div>
                         <div>
-                            <label className="text-sm">Max Queue Length Slot Limit</label>
-                            <Input type="number" defaultValue="5" min="1" />
+                            <label className="text-sm font-semibold">Color Single Page Cost (₹)</label>
+                            <Input type="number" min="0" step="0.5" value={settings.colorSinglePageCost} onChange={(e) => setSettings({...settings, colorSinglePageCost: e.target.value})} required />
                         </div>
                         <div>
-                            <label className="text-sm">Store Operating Time (hh:mm)</label>
-                            <Input type="text" defaultValue="10:00 - 20:00" />
+                            <label className="text-sm font-semibold">Color Double Page Cost (₹)</label>
+                            <Input type="number" min="0" step="0.5" value={settings.colorDoublePageCost} onChange={(e) => setSettings({...settings, colorDoublePageCost: e.target.value})} required />
+                        </div>
+                        <div>
+                            <label className="text-sm font-semibold">Max File Size (MB)</label>
+                            <Input type="number" min="1" value={settings.maxFileSizeMb} onChange={(e) => setSettings({...settings, maxFileSizeMb: e.target.value})} required />
+                        </div>
+                        <div>
+                            <label className="text-sm font-semibold">Max Slot Bookings</label>
+                            <Input type="number" min="1" value={settings.maxSlotBookings} onChange={(e) => setSettings({...settings, maxSlotBookings: e.target.value})} required />
                         </div>
                     </div>
-                    <Button type="submit" variant="primary">Confirm Changes</Button>
+                    <Button type="submit" variant="primary" disabled={savingSettings}>
+                        {savingSettings ? 'Saving to Database...' : 'Save Settings to DB'}
+                    </Button>
                 </form>
             </Modal>
         </div>

@@ -28,11 +28,9 @@ const checkFileType = (file, cb) => {
     }
 };
 
-const maxFileSize = (parseInt(process.env.MAX_FILE_SIZE_MB || '10', 10)) * 1024 * 1024;
-
 const upload = multer({
     storage,
-    limits: { fileSize: maxFileSize },
+    limits: { fileSize: 50 * 1024 * 1024 }, // General stream cap (50MB)
     fileFilter: function (req, file, cb) {
         checkFileType(file, cb);
     }

@@ -52,9 +52,11 @@ app.get('/api/health', (req, res) => {
 // Import and use routes
 const userRoutes = require('./src/routes/userRoutes');
 const printJobRoutes = require('./src/routes/printJobRoutes');
+const configRoutes = require('./src/routes/configRoutes');
 
 app.use('/api/users', userRoutes);
 app.use('/api/print-jobs', printJobRoutes);
+app.use('/api/config', configRoutes);
 
 // Start Auto-cleanup Service
 const startCleanupService = require('./src/services/cleanupService');
