@@ -15,7 +15,8 @@ const cleanupJobs = async () => {
 
         for (const job of jobsToCleanup) {
             if (job.fileUrl) {
-                const filePath = path.join(__dirname, '../../uploads', job.fileUrl);
+                const uploadDir = process.env.UPLOAD_DIR || 'uploads';
+                const filePath = path.join(__dirname, '../../', uploadDir, job.fileUrl);
                 if (fs.existsSync(filePath)) {
                     fs.unlinkSync(filePath);
                     console.log(`Auto-cleanup: Deleted file ${job.fileUrl}`);
@@ -31,9 +32,9 @@ const cleanupJobs = async () => {
 };
 
 const startCleanupService = () => {
-    // Run every 10 minutes
-    setInterval(cleanupJobs, 10 * 60000);
-    console.log('Auto-cleanup service started');
+    const intervalMins = parseInt(process.env.CLEANUP_INTERVAL_MINS || '10', 10);
+    setInterval(cleanupJobs, intervalMins * 60000);
+    console.log(`Auto-cleanup service started (running every ${intervalMins} mins)`);
 };
 
 module.exports = startCleanupService;

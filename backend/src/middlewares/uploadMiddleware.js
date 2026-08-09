@@ -2,7 +2,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-const uploadDir = 'uploads/';
+const uploadDir = process.env.UPLOAD_DIR || 'uploads/';
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
@@ -28,9 +28,11 @@ const checkFileType = (file, cb) => {
     }
 };
 
+const maxFileSize = (parseInt(process.env.MAX_FILE_SIZE_MB || '10', 10)) * 1024 * 1024;
+
 const upload = multer({
     storage,
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+    limits: { fileSize: maxFileSize },
     fileFilter: function (req, file, cb) {
         checkFileType(file, cb);
     }

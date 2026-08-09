@@ -21,7 +21,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Serve uploaded files statically
-app.use('/uploads', express.static('uploads'));
+app.use('/uploads', express.static(process.env.UPLOAD_DIR || 'uploads'));
 
 // Socket.io initialization
 const io = new Server(server, {
