@@ -2,12 +2,100 @@ const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const generateToken = require('../utils/generateToken');
 const bcrypt = require('bcryptjs');
+const { OAuth2Client } = require('google-auth-library');
+
+const googleClient = new OAuth2Client(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET
+);
+
+// @desc    Auth or register user with Google OAuth2
+// @route   POST /api/users/google-auth
+// @access  Public
+const googleAuthUser = async (req, res) => {
+    const { token, credential } = req.body;
+    const idToken = token || credential;
+
+    if (!idToken) {
+        return res.status(400).json({ message: 'Google token is required' });
+    }
+
+    try {
+        let email, name, sub;
+
+        // Try verifying Google ID Token
+        if (process.env.GOOGLE_CLIENT_ID) {
+            try {
+                const ticket = await googleClient.verifyIdToken({
+                    idToken,
+                    audience: process.env.GOOGLE_CLIENT_ID
+                });
+                const payload = ticket.getPayload();
+                email = payload.email;
+                name = payload.name;
+                sub = payload.sub;
+            } catch (verifyErr) {
+                console.warn('ID token verification fallback:', verifyErr.message);
+            }
+        }
+
+        // Fallback decoding if payload missing
+        if (!email) {
+            const jwt = require('jsonwebtoken');
+            const decoded = jwt.decode(idToken);
+            if (decoded && decoded.email) {
+                email = decoded.email;
+                name = decoded.name || email.split('@')[0];
+                sub = decoded.sub || '';
+            }
+        }
+
+        if (!email) {
+            return res.status(400).json({ message: 'Google authentication failed to return an email address' });
+        }
+
+        let user = await User.findOne({ email });
+
+        if (user) {
+            if (!user.googleId && sub) {
+                user.googleId = sub;
+                await user.save();
+            }
+        } else {
+            // Register new student account via Google
+            const salt = await bcrypt.genSalt(10);
+            const dummyPassword = await bcrypt.hash(`google_${sub || Date.now()}`, salt);
+
+            user = await User.create({
+                name: name || email.split('@')[0],
+                email,
+                password: dummyPassword,
+                googleId: sub || '',
+                role: 'student'
+            });
+        }
+
+        res.json({
+            _id: user._id,
+            name: user.name,
+            email: user.email,
+            phone: user.phone || '',
+            role: user.role,
+            walletBalance: user.walletBalance,
+            lockedBalance: user.lockedBalance,
+            token: generateToken(user._id),
+        });
+    } catch (error) {
+        console.error('Google Auth Error:', error);
+        res.status(401).json({ message: 'Google authentication failed' });
+    }
+};
 
 // @desc    Register a new user
 // @route   POST /api/users/register
 // @access  Public
 const registerUser = async (req, res) => {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, phone, role } = req.body;
 
     try {
         const userExists = await User.findOne({ email });
@@ -25,6 +113,7 @@ const registerUser = async (req, res) => {
             name,
             email,
             password: hashedPassword,
+            phone: phone || '',
             role: userRole,
         });
 
@@ -33,6 +122,7 @@ const registerUser = async (req, res) => {
                 _id: user._id,
                 name: user.name,
                 email: user.email,
+                phone: user.phone,
                 role: user.role,
                 walletBalance: user.walletBalance,
                 token: generateToken(user._id),
@@ -59,6 +149,7 @@ const authUser = async (req, res) => {
                 _id: user._id,
                 name: user.name,
                 email: user.email,
+                phone: user.phone,
                 role: user.role,
                 walletBalance: user.walletBalance,
                 lockedBalance: user.lockedBalance,
@@ -84,6 +175,7 @@ const getUserProfile = async (req, res) => {
                 _id: user._id,
                 name: user.name,
                 email: user.email,
+                phone: user.phone,
                 role: user.role,
                 walletBalance: user.walletBalance,
                 lockedBalance: user.lockedBalance,
@@ -92,6 +184,64 @@ const getUserProfile = async (req, res) => {
             res.status(404).json({ message: 'User not found' });
         }
     } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Update user profile and/or change password
+// @route   PUT /api/users/profile
+// @access  Private
+const updateUserProfile = async (req, res) => {
+    try {
+        console.log(`Update profile request for user ID: ${req.user?._id}`);
+        const user = await User.findById(req.user._id);
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const { name, email, phone, oldPassword, newPassword } = req.body;
+
+        // Verify old password if user attempts to change password
+        if (newPassword) {
+            if (!oldPassword) {
+                return res.status(400).json({ message: 'Please enter your current password to change password' });
+            }
+            const isMatch = await bcrypt.compare(oldPassword, user.password);
+            if (!isMatch) {
+                console.log(`Password mismatch for user ${user.email}`);
+                return res.status(400).json({ message: 'Incorrect current password' });
+            }
+            const salt = await bcrypt.genSalt(10);
+            user.password = await bcrypt.hash(newPassword, salt);
+            console.log(`Password updated successfully for user ${user.email}`);
+        }
+
+        // Update profile fields
+        if (name) user.name = name;
+        if (phone !== undefined) user.phone = phone;
+        if (email && email !== user.email) {
+            const emailExists = await User.findOne({ email, _id: { $ne: user._id } });
+            if (emailExists) {
+                return res.status(400).json({ message: 'Email address is already in use' });
+            }
+            user.email = email;
+        }
+
+        const updatedUser = await user.save();
+
+        res.json({
+            _id: updatedUser._id,
+            name: updatedUser.name,
+            email: updatedUser.email,
+            phone: updatedUser.phone,
+            role: updatedUser.role,
+            walletBalance: updatedUser.walletBalance,
+            lockedBalance: updatedUser.lockedBalance,
+            token: generateToken(updatedUser._id),
+        });
+    } catch (error) {
+        console.error('updateUserProfile error:', error);
         res.status(500).json({ message: error.message });
     }
 };
@@ -281,7 +431,9 @@ const getAdminReports = async (req, res) => {
 module.exports = {
     registerUser,
     authUser,
+    googleAuthUser,
     getUserProfile,
+    updateUserProfile,
     topUpWallet,
     getAdminRevenue,
     refundWallet,

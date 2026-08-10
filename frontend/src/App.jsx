@@ -7,6 +7,7 @@ import { SocketProvider } from './context/SocketContext';
 
 import { Navbar } from './components/Navbar';
 import Login from './pages/Login';
+import Register from './pages/Register';
 import StudentDashboard from './pages/StudentDashboard';
 import StaffDashboard from './pages/StaffDashboard';
 import AdminDashboard from './pages/AdminDashboard';
@@ -23,6 +24,7 @@ function App() {
                 <Routes>
                   <Route path="/" element={<Navigate to="/login" />} />
                   <Route path="/login" element={<Login />} />
+                  <Route path="/register" element={<Register />} />
                   <Route path="/student/*" element={<StudentDashboard />} />
                   <Route path="/staff/*" element={<StaffDashboard />} />
                   <Route path="/admin/*" element={<AdminDashboard />} />

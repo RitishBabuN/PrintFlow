@@ -61,6 +61,15 @@ const StudentDashboard = () => {
     const [scheduledTime, setScheduledTime] = useState('');
     const [showConfirm, setShowConfirm] = useState(false);
 
+    const [sysConfig, setSysConfig] = useState({
+        bwSinglePageCost: 3,
+        bwDoublePageCost: 2,
+        colorSinglePageCost: 14,
+        colorDoublePageCost: 10,
+        maxFileSizeMb: 10,
+        maxSlotBookings: 5
+    });
+
     useEffect(() => {
         if (!user) {
             if (!localStorage.getItem('userInfo')) navigate('/login');
@@ -82,14 +91,16 @@ const StudentDashboard = () => {
 
     const fetchDashboardData = async () => {
         try {
-            const [profileRes, jobsRes] = await Promise.all([
+            const [profileRes, jobsRes, configRes] = await Promise.all([
                 api.get('/api/users/profile'),
-                api.get('/api/print-jobs/myjobs')
+                api.get('/api/print-jobs/myjobs'),
+                api.get('/api/config')
             ]);
 
             updateBalances(profileRes.data.walletBalance, profileRes.data.lockedBalance);
             setJobs(jobsRes.data.jobs);
             setWaitMins(jobsRes.data.estimatedWaitMins);
+            if (configRes.data) setSysConfig(configRes.data);
         } catch (err) {
             console.error(err);
         }
@@ -223,8 +234,10 @@ const StudentDashboard = () => {
     // Estimation logic
     const totalPdfPages = exactPages !== null ? exactPages : (file ? Math.max(1, Math.ceil(file.size / 50000)) : 1);
     const estPages = parsePageRange(pageRange, totalPdfPages);
-    const pageCost = color ? (doubleSided ? 10 : 14) : (doubleSided ? 2 : 3);
-    const estCost = estPages * copies * pageCost;
+    const activeUnitCost = color
+        ? (doubleSided ? (sysConfig.colorDoublePageCost || 10) : (sysConfig.colorSinglePageCost || 14))
+        : (doubleSided ? (sysConfig.bwDoublePageCost || 2) : (sysConfig.bwSinglePageCost || 3));
+    const estCost = estPages * copies * activeUnitCost;
 
     const getStatusColor = (status) => {
         switch (status) {
@@ -284,7 +297,7 @@ const StudentDashboard = () => {
                             <div className="grid-2 gap-4 mt-2">
                                 <label className="flex items-center gap-3 p-3 border rounded cursor-pointer transition" style={{ borderColor: 'var(--border-color)', background: color ? 'rgba(99, 102, 241, 0.1)' : 'rgba(255,255,255,0.02)' }}>
                                     <input type="checkbox" checked={color} onChange={(e) => setColor(e.target.checked)} className="w-5 h-5 accent-primary" />
-                                    <span className="text-sm font-semibold">Color Print (₹14/face)</span>
+                                    <span className="text-sm font-semibold">Color Print (₹{sysConfig.colorSinglePageCost || 14}/face)</span>
                                 </label>
                                 <label className="flex items-center gap-3 p-3 border rounded cursor-pointer transition" style={{ borderColor: 'var(--border-color)', background: doubleSided ? 'rgba(99, 102, 241, 0.1)' : 'rgba(255,255,255,0.02)' }}>
                                     <input type="checkbox" checked={doubleSided} onChange={(e) => setDoubleSided(e.target.checked)} className="w-5 h-5 accent-primary" />
@@ -305,7 +318,7 @@ const StudentDashboard = () => {
                                 {!isInstant && (
                                     <div className="mt-2">
                                         <Input type="datetime-local" min={minDateTime} max={maxDateTime} value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} required />
-                                        <p className="text-xs text-secondary mt-1 max-w-[300px]">Only accepting schedules between 10 AM and 8 PM today. Please observe the max limit of 5 jobs per 15m slot.</p>
+                                        <p className="text-xs text-secondary mt-1 max-w-[300px]">Only accepting schedules between 10 AM and 8 PM today. Max limit of {sysConfig.maxSlotBookings || 5} jobs per 15m slot.</p>
                                     </div>
                                 )}
                             </div>

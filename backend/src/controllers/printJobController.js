@@ -2,10 +2,9 @@ const PrintJob = require('../models/PrintJob');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const Printer = require('../models/Printer');
+const Config = require('../models/Config');
 const fs = require('fs');
 const pdfParse = require('pdf-parse');
-
-const PRICE_PER_PAGE = 2; // 2 Rupees per page
 
 // @desc    Upload a new print job
 // @route   POST /api/print-jobs
@@ -17,6 +16,13 @@ const createPrintJob = async (req, res) => {
         }
 
         const { color, doubleSided, copies, pageRange, isInstant, scheduledTime } = req.body;
+        const sysConfig = await Config.getSettings();
+
+        const maxFileBytes = (sysConfig.maxFileSizeMb || 10) * 1024 * 1024;
+        if (req.file.size > maxFileBytes) {
+            if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+            return res.status(400).json({ message: `File size exceeds the maximum limit of ${sysConfig.maxFileSizeMb || 10}MB` });
+        }
 
         let pages = Math.max(1, Math.ceil(req.file.size / 50000));
 
@@ -68,9 +74,9 @@ const createPrintJob = async (req, res) => {
 
         let pageCost = 0;
         if (isColor) {
-            pageCost = isDouble ? 10 : 14;
+            pageCost = isDouble ? sysConfig.colorDoublePageCost : sysConfig.colorSinglePageCost;
         } else {
-            pageCost = isDouble ? 2 : 3;
+            pageCost = isDouble ? sysConfig.bwDoublePageCost : sysConfig.bwSinglePageCost;
         }
 
         const totalCost = calculatedPages * calculatedCopies * pageCost;
@@ -88,7 +94,7 @@ const createPrintJob = async (req, res) => {
                 return res.status(400).json({ message: 'Schedule must be today between 10:00 AM and 08:00 PM.' });
             }
 
-            // Anti-crowding check (max 5 per +- 15 minute slot window)
+            // Anti-crowding check (max bookings per +- 15 minute slot window)
             const windowStart = new Date(schedTime.getTime() - 15 * 60000);
             const windowEnd = new Date(schedTime.getTime() + 15 * 60000);
             const slotCount = await PrintJob.countDocuments({
@@ -96,9 +102,10 @@ const createPrintJob = async (req, res) => {
                 status: { $in: ['Submitted', 'In Queue', 'Accepted'] }
             });
 
-            if (slotCount >= 5) {
+            const maxSlotBookings = sysConfig.maxSlotBookings || 5;
+            if (slotCount >= maxSlotBookings) {
                 if (req.file) fs.unlinkSync(req.file.path);
-                return res.status(400).json({ message: 'Time slot is full (max 5 bookings). Please select a different time.' });
+                return res.status(400).json({ message: `Time slot is full (max ${maxSlotBookings} bookings). Please select a different time.` });
             }
         }
 
